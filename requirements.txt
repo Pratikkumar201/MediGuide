@@ -1,5 +1,4 @@
-﻿google-adk==2.1.0
+google-adk==2.1.0
 google-genai>=1.72,<2
-websockets>=15.0.1,<16
 python-dotenv>=1.0.0
 requests>=2.31.0

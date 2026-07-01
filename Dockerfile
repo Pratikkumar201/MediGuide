@@ -14,22 +14,37 @@
 
 FROM python:3.12-slim
 
-RUN pip install --no-cache-dir uv==0.8.13
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /code
+# Create a non-root user (required by HF Spaces)
+RUN useradd -m -u 1000 user
+USER user
+ENV PATH="/home/user/.local/bin:$PATH"
 
-COPY ./pyproject.toml ./README.md ./uv.lock* ./
+WORKDIR /home/user/app
 
-COPY ./app ./app
+# Copy and install dependencies first (for layer caching)
+COPY --chown=user requirements.txt .
 
-RUN uv sync --frozen
+# Install all deps from requirements.txt + a gradio version compatible with
+# google-adk==2.1.0 (websockets>=15.0.1,<16).
+# gradio>=4.44.0 uses gradio-client>=0.9 which supports websockets>=15.
+RUN pip install --no-cache-dir \
+    -r requirements.txt \
+    "gradio>=4.44.0,<5.0.0" \
+    "uvicorn>=0.14.0"
 
-ARG COMMIT_SHA=""
-ENV COMMIT_SHA=${COMMIT_SHA}
+# Copy the rest of the application
+COPY --chown=user . .
 
-ARG AGENT_VERSION=0.0.0
-ENV AGENT_VERSION=${AGENT_VERSION}
+# HF Spaces Docker apps must listen on port 7860
+EXPOSE 7860
 
-EXPOSE 8080
+# Set environment variable to tell Gradio which port to use
+ENV GRADIO_SERVER_PORT=7860
+ENV GRADIO_SERVER_NAME=0.0.0.0
 
-CMD ["uv", "run", "uvicorn", "app.fast_api_app:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["python", "app.py"]

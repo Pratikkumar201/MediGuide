@@ -78,12 +78,25 @@ async def chat_with_agent(message: str, history: list) -> str:
                 new_message=new_message,
             )
             parts = []
+            error_msg = None
             for event in events:
                 if event.content and event.content.parts:
                     for part in event.content.parts:
                         if part.text:
                             parts.append(part.text)
-            return "".join(parts)
+                elif hasattr(event, "error_message") and event.error_message:
+                    error_msg = event.error_message
+            if parts:
+                return "".join(parts)
+            if error_msg:
+                if "RESOURCE_EXHAUSTED" in error_msg or "429" in error_msg:
+                    return (
+                        "⚠️ **API Quota Exceeded**: The Gemini API free-tier quota has been exhausted. "
+                        "Please check your [Google AI Studio](https://aistudio.google.com/) billing/quota, "
+                        "or wait for the quota to reset."
+                    )
+                return f"⚠️ Agent error: {error_msg[:300]}"
+            return "⚠️ No response received from the agent. Please try again."
 
         # Offload blocking ADK call to a thread pool to keep the async loop free
         response = await asyncio.to_thread(_run_agent)
